@@ -54,6 +54,9 @@ if [ "$CC_SRC_PATH" = "NA" ]; then
   elif [ "$CC_NAME" = "sbe" ]; then
     println $'\e[0;32m'asset-transfer-sbe$'\e[0m' chaincode
     CC_SRC_PATH="../asset-transfer-sbe"
+    elif [ "$CC_NAME" = "test" ]; then
+    println $'\e[0;32m'asset-transfer-test$'\e[0m' chaincode
+    CC_SRC_PATH="../asset-transfer-test"
   else
     fatalln "The chaincode name ${CC_NAME} is not supported by this script. Supported chaincode names are: basic, ledger, private, sbe, secured"
   fi

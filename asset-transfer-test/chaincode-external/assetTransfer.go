@@ -1,13 +1,25 @@
-package chaincode
+/*
+SPDX-License-Identifier: Apache-2.0
+*/
+
+package main
 
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 
+	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
-// SmartContract provides functions for managing an Asset
+type serverConfig struct {
+	CCID    string
+	Address string
+}
+
+// SmartContract provides functions for managing an asset
 type SmartContract struct {
 	contractapi.Contract
 }
@@ -21,7 +33,13 @@ type Asset struct {
 	AppraisedValue int    `json:"appraisedValue"`
 }
 
-// InitLedger adds a base set of assets to the ledger
+// QueryResult structure used for handling result of query
+type QueryResult struct {
+	Key    string `json:"Key"`
+	Record *Asset
+}
+
+// InitLedger adds a base set of cars to the ledger
 func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
 	assets := []Asset{
 		{ID: "asset1", Color: "blue", Size: 5, Owner: "Tomoko", AppraisedValue: 300},
@@ -40,7 +58,7 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 
 		err = ctx.GetStub().PutState(asset.ID, assetJSON)
 		if err != nil {
-			return fmt.Errorf("failed to put to world state. %v", err)
+			return fmt.Errorf("failed to put to world state: %v", err)
 		}
 	}
 
@@ -48,7 +66,7 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 }
 
 // CreateAsset issues a new asset to the world state with given details.
-func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface, id string, color string, size int, owner string, appraisedValue int) error {
+func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface, id, color string, size int, owner string, appraisedValue int) error {
 	exists, err := s.AssetExists(ctx, id)
 	if err != nil {
 		return err
@@ -56,7 +74,6 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 	if exists {
 		return fmt.Errorf("the asset %s already exists", id)
 	}
-
 	asset := Asset{
 		ID:             id,
 		Color:          color,
@@ -64,6 +81,7 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 		Owner:          owner,
 		AppraisedValue: appraisedValue,
 	}
+
 	assetJSON, err := json.Marshal(asset)
 	if err != nil {
 		return err
@@ -76,7 +94,7 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 func (s *SmartContract) ReadAsset(ctx contractapi.TransactionContextInterface, id string) (*Asset, error) {
 	assetJSON, err := ctx.GetStub().GetState(id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read from world state: %v", err)
+		return nil, fmt.Errorf("failed to read from world state. %s", err.Error())
 	}
 	if assetJSON == nil {
 		return nil, fmt.Errorf("the asset %s does not exist", id)
@@ -92,7 +110,7 @@ func (s *SmartContract) ReadAsset(ctx contractapi.TransactionContextInterface, i
 }
 
 // UpdateAsset updates an existing asset in the world state with provided parameters.
-func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface, id string, color string, size int, owner string, appraisedValue int) error {
+func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface, id, color string, size int, owner string, appraisedValue int) error {
 	exists, err := s.AssetExists(ctx, id)
 	if err != nil {
 		return err
@@ -101,7 +119,7 @@ func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface,
 		return fmt.Errorf("the asset %s does not exist", id)
 	}
 
-	// overwriting original asset with new asset
+	// overwritting original asset with new asset
 	asset := Asset{
 		ID:             id,
 		Color:          color,
@@ -109,43 +127,13 @@ func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface,
 		Owner:          owner,
 		AppraisedValue: appraisedValue,
 	}
+
 	assetJSON, err := json.Marshal(asset)
 	if err != nil {
 		return err
 	}
 
 	return ctx.GetStub().PutState(id, assetJSON)
-}
-
-// NEW FUNCTION
-func (s *SmartContract) UpdateSizeAsset(ctx contractapi.TransactionContextInterface, id string, size int) error {
-	exists, err := s.AssetExists(ctx, id)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return fmt.Errorf("the asset %s does not exist", id)
-	}
-	//check if size is the same
-	oldAsset, _ := s.ReadAsset(ctx, id)
-	if oldAsset.Size != size {
-		newAsset := Asset{
-			ID:             id,
-			Color:          oldAsset.Color,
-			Size:           size,
-			Owner:          oldAsset.Owner,
-			AppraisedValue: oldAsset.AppraisedValue,
-		}
-		assetJSON, err := json.Marshal(newAsset)
-		if err != nil {
-			return err
-		}
-		return ctx.GetStub().PutState(id, assetJSON)
-	}
-	if int(oldAsset.Size) == size {
-		return fmt.Errorf("the previous asset %s have the same size!", id)
-	}
-	return fmt.Errorf("Asset %s changed", id)
 }
 
 // DeleteAsset deletes an given asset from the world state.
@@ -165,7 +153,7 @@ func (s *SmartContract) DeleteAsset(ctx contractapi.TransactionContextInterface,
 func (s *SmartContract) AssetExists(ctx contractapi.TransactionContextInterface, id string) (bool, error) {
 	assetJSON, err := ctx.GetStub().GetState(id)
 	if err != nil {
-		return false, fmt.Errorf("failed to read from world state: %v", err)
+		return false, fmt.Errorf("failed to read from world state. %s", err.Error())
 	}
 
 	return assetJSON != nil, nil
@@ -188,18 +176,20 @@ func (s *SmartContract) TransferAsset(ctx contractapi.TransactionContextInterfac
 }
 
 // GetAllAssets returns all assets found in world state
-func (s *SmartContract) GetAllAssets(ctx contractapi.TransactionContextInterface) ([]*Asset, error) {
-	// range query with empty string for startKey and endKey does an
-	// open-ended query of all assets in the chaincode namespace.
+func (s *SmartContract) GetAllAssets(ctx contractapi.TransactionContextInterface) ([]QueryResult, error) {
+	// range query with empty string for startKey and endKey does an open-ended query of all assets in the chaincode namespace.
 	resultsIterator, err := ctx.GetStub().GetStateByRange("", "")
+
 	if err != nil {
 		return nil, err
 	}
 	defer resultsIterator.Close()
 
-	var assets []*Asset
+	var results []QueryResult
+
 	for resultsIterator.HasNext() {
 		queryResponse, err := resultsIterator.Next()
+
 		if err != nil {
 			return nil, err
 		}
@@ -209,8 +199,37 @@ func (s *SmartContract) GetAllAssets(ctx contractapi.TransactionContextInterface
 		if err != nil {
 			return nil, err
 		}
-		assets = append(assets, &asset)
+
+		queryResult := QueryResult{Key: queryResponse.Key, Record: &asset}
+		results = append(results, queryResult)
 	}
 
-	return assets, nil
+	return results, nil
+}
+
+func main() {
+	// See chaincode.env.example
+	config := serverConfig{
+		CCID:    os.Getenv("CHAINCODE_ID"),
+		Address: os.Getenv("CHAINCODE_SERVER_ADDRESS"),
+	}
+
+	chaincode, err := contractapi.NewChaincode(&SmartContract{})
+
+	if err != nil {
+		log.Panicf("error create asset-transfer-basic chaincode: %s", err)
+	}
+
+	server := &shim.ChaincodeServer{
+		CCID:    config.CCID,
+		Address: config.Address,
+		CC:      chaincode,
+		TLSProps: shim.TLSProperties{
+			Disabled: true,
+		},
+	}
+
+	if err := server.Start(); err != nil {
+		log.Panicf("error starting asset-transfer-basic chaincode: %s", err)
+	}
 }

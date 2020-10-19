@@ -12,24 +12,20 @@ type SmartContract struct {
 	contractapi.Contract
 }
 
-// Asset describes basic details of what makes up a simple asset
 type Asset struct {
 	ID             string `json:"ID"`
-	Color          string `json:"color"`
-	Size           int    `json:"size"`
-	Owner          string `json:"owner"`
-	AppraisedValue int    `json:"appraisedValue"`
+	EnergiaErogata int    `json:"EnergiaErogata"`
+	NomeAcquirente string `json:"NomeAcquirente"`
+	NomeVenditore  string `json:"NomeVenditore"`
+	PrezzoKWh      int    `json:"PrezzoKWh"`
 }
 
 // InitLedger adds a base set of assets to the ledger
 func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
 	assets := []Asset{
-		{ID: "asset1", Color: "blue", Size: 5, Owner: "Tomoko", AppraisedValue: 300},
-		{ID: "asset2", Color: "red", Size: 5, Owner: "Brad", AppraisedValue: 400},
-		{ID: "asset3", Color: "green", Size: 10, Owner: "Jin Soo", AppraisedValue: 500},
-		{ID: "asset4", Color: "yellow", Size: 10, Owner: "Max", AppraisedValue: 600},
-		{ID: "asset5", Color: "black", Size: 15, Owner: "Adriana", AppraisedValue: 700},
-		{ID: "asset6", Color: "white", Size: 15, Owner: "Michel", AppraisedValue: 800},
+		{ID: "00001", EnergiaErogata: 20, NomeAcquirente: "Mirko", NomeVenditore: "Mirko", PrezzoKWh: 50},
+		{ID: "00002", EnergiaErogata: 30, NomeAcquirente: "Salvatore", NomeVenditore: "Salvatore", PrezzoKWh: 70},
+		{ID: "00003", EnergiaErogata: 10, NomeAcquirente: "Pierluigi", NomeVenditore: "Mirko", PrezzoKWh: 90},
 	}
 
 	for _, asset := range assets {
@@ -48,7 +44,7 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 }
 
 // CreateAsset issues a new asset to the world state with given details.
-func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface, id string, color string, size int, owner string, appraisedValue int) error {
+func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface, id string, EnergiaErogata int, NomeAcquirente string, NomeVenditore string, PrezzoKWh int) error {
 	exists, err := s.AssetExists(ctx, id)
 	if err != nil {
 		return err
@@ -59,10 +55,10 @@ func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
 
 	asset := Asset{
 		ID:             id,
-		Color:          color,
-		Size:           size,
-		Owner:          owner,
-		AppraisedValue: appraisedValue,
+		EnergiaErogata: EnergiaErogata,
+		NomeAcquirente: NomeAcquirente,
+		NomeVenditore:  NomeVenditore,
+		PrezzoKWh:      PrezzoKWh,
 	}
 	assetJSON, err := json.Marshal(asset)
 	if err != nil {
@@ -92,7 +88,7 @@ func (s *SmartContract) ReadAsset(ctx contractapi.TransactionContextInterface, i
 }
 
 // UpdateAsset updates an existing asset in the world state with provided parameters.
-func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface, id string, color string, size int, owner string, appraisedValue int) error {
+func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface, id string, EnergiaErogata int, NomeAcquirente string, NomeVenditore string, PrezzoKWh int) error {
 	exists, err := s.AssetExists(ctx, id)
 	if err != nil {
 		return err
@@ -104,10 +100,10 @@ func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface,
 	// overwriting original asset with new asset
 	asset := Asset{
 		ID:             id,
-		Color:          color,
-		Size:           size,
-		Owner:          owner,
-		AppraisedValue: appraisedValue,
+		EnergiaErogata: EnergiaErogata,
+		NomeAcquirente: NomeAcquirente,
+		NomeVenditore:  NomeVenditore,
+		PrezzoKWh:      PrezzoKWh,
 	}
 	assetJSON, err := json.Marshal(asset)
 	if err != nil {
@@ -115,37 +111,6 @@ func (s *SmartContract) UpdateAsset(ctx contractapi.TransactionContextInterface,
 	}
 
 	return ctx.GetStub().PutState(id, assetJSON)
-}
-
-// NEW FUNCTION
-func (s *SmartContract) UpdateSizeAsset(ctx contractapi.TransactionContextInterface, id string, size int) error {
-	exists, err := s.AssetExists(ctx, id)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return fmt.Errorf("the asset %s does not exist", id)
-	}
-	//check if size is the same
-	oldAsset, _ := s.ReadAsset(ctx, id)
-	if oldAsset.Size != size {
-		newAsset := Asset{
-			ID:             id,
-			Color:          oldAsset.Color,
-			Size:           size,
-			Owner:          oldAsset.Owner,
-			AppraisedValue: oldAsset.AppraisedValue,
-		}
-		assetJSON, err := json.Marshal(newAsset)
-		if err != nil {
-			return err
-		}
-		return ctx.GetStub().PutState(id, assetJSON)
-	}
-	if int(oldAsset.Size) == size {
-		return fmt.Errorf("the previous asset %s have the same size!", id)
-	}
-	return fmt.Errorf("Asset %s changed", id)
 }
 
 // DeleteAsset deletes an given asset from the world state.
@@ -169,22 +134,6 @@ func (s *SmartContract) AssetExists(ctx contractapi.TransactionContextInterface,
 	}
 
 	return assetJSON != nil, nil
-}
-
-// TransferAsset updates the owner field of asset with given id in world state.
-func (s *SmartContract) TransferAsset(ctx contractapi.TransactionContextInterface, id string, newOwner string) error {
-	asset, err := s.ReadAsset(ctx, id)
-	if err != nil {
-		return err
-	}
-
-	asset.Owner = newOwner
-	assetJSON, err := json.Marshal(asset)
-	if err != nil {
-		return err
-	}
-
-	return ctx.GetStub().PutState(id, assetJSON)
 }
 
 // GetAllAssets returns all assets found in world state
